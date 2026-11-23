@@ -4,62 +4,77 @@ namespace App\Policies;
 
 use App\Models\Project;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class ProjectPolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * Global admin can perform all project actions.
+     */
+    public function before(User $user): ?bool
+    {
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        return null;
+    }
+
+    /**
+     * Any authenticated user can access the project listing.
+     * Actual project visibility is filtered in the controller.
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**
-     * Determine whether the user can view the model.
+     * Owner or project member can view the project.
      */
     public function view(User $user, Project $project): bool
     {
-        return $project->owner_id === $user->id
-            || $project->members()->where('users.id', $user->id)->exists();
+        return (int) $project->owner_id === (int) $user->id
+            || $project->members()
+                ->where('users.id', $user->id)
+                ->exists();
     }
 
     /**
-     * Determine whether the user can create models.
+     * Authenticated users can create projects.
      */
     public function create(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Owner or project manager can update.
      */
     public function update(User $user, Project $project): bool
     {
-        return false;
+        if ((int) $project->owner_id === (int) $user->id) {
+            return true;
+        }
+
+        return $project->members()
+            ->where('users.id', $user->id)
+            ->wherePivot('role', 'manager')
+            ->exists();
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Only owner or global admin can delete.
      */
     public function delete(User $user, Project $project): bool
     {
-        return false;
+        return (int) $project->owner_id === (int) $user->id;
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
     public function restore(User $user, Project $project): bool
     {
         return false;
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
     public function forceDelete(User $user, Project $project): bool
     {
         return false;
