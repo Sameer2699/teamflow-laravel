@@ -47,6 +47,38 @@ class ProjectPolicy
         return true;
     }
 
+	/**
+ * Project owner and members can view the member list.
+ */
+public function viewMembers(User $user, Project $project): bool
+{
+    return $this->view($user, $project);
+}
+
+/**
+ * Only project owner can add members.
+ */
+public function addMember(User $user, Project $project): bool
+{
+    return (int) $project->owner_id === (int) $user->id;
+}
+
+/**
+ * Only project owner can change member roles.
+ */
+public function updateMemberRole(User $user, Project $project): bool
+{
+    return (int) $project->owner_id === (int) $user->id;
+}
+
+/**
+ * Only project owner can remove members.
+ */
+public function removeMember(User $user, Project $project): bool
+{
+    return (int) $project->owner_id === (int) $user->id;
+}
+
     /**
      * Owner or project manager can update.
      */

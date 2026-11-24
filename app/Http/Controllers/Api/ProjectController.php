@@ -8,6 +8,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use App\Models\User;
+use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
@@ -101,4 +103,159 @@ public function destroy(Project $project): JsonResponse
         'message' => 'Project deleted successfully.',
     ]);
 }
+
+public function members(Project $project): JsonResponse
+{
+    Gate::authorize('viewMembers', $project);
+
+    $members = $project->members()
+        ->select('users.id', 'users.name', 'users.email')
+        ->get()
+        ->map(function ($member) {
+            return [
+                'id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+                'role' => $member->pivot->role,
+                'joined_at' => $member->pivot->joined_at,
+            ];
+        });
+
+    return response()->json([
+        'project_id' => $project->id,
+        'owner' => $project->owner()->select('id', 'name', 'email')->first(),
+        'members' => $members,
+    ]);
+}
+
+
+public function addMember(Request $request, Project $project): JsonResponse
+{
+    Gate::authorize('addMember', $project);
+
+    $validated = $request->validate([
+        'user_id' => [
+            'required',
+            'integer',
+            'exists:users,id',
+        ],
+        'role' => [
+            'required',
+            'string',
+            Rule::in(['manager', 'developer', 'viewer']),
+        ],
+    ]);
+
+    if ((int) $project->owner_id === (int) $validated['user_id']) {
+        return response()->json([
+            'message' => 'Project owner cannot be added as a member.',
+        ], 422);
+    }
+
+    $alreadyMember = $project->members()
+        ->where('users.id', $validated['user_id'])
+        ->exists();
+
+    if ($alreadyMember) {
+        return response()->json([
+            'message' => 'User is already a member of this project.',
+        ], 409);
+    }
+
+    $project->members()->attach($validated['user_id'], [
+        'role' => $validated['role'],
+        'joined_at' => now(),
+    ]);
+
+    $member = User::query()
+        ->select('id', 'name', 'email')
+        ->findOrFail($validated['user_id']);
+
+    return response()->json([
+        'message' => 'Project member added successfully.',
+        'member' => [
+            'id' => $member->id,
+            'name' => $member->name,
+            'email' => $member->email,
+            'role' => $validated['role'],
+        ],
+    ], 201);
+}
+
+
+public function removeMember(Project $project, User $user): JsonResponse
+{
+    Gate::authorize('removeMember', $project);
+
+    if ((int) $project->owner_id === (int) $user->id) {
+        return response()->json([
+            'message' => 'Project owner cannot be removed.',
+        ], 422);
+    }
+
+    $isMember = $project->members()
+        ->where('users.id', $user->id)
+        ->exists();
+
+    if (!$isMember) {
+        return response()->json([
+            'message' => 'User is not a member of this project.',
+        ], 404);
+    }
+
+    $project->members()->detach($user->id);
+
+    return response()->json([
+        'message' => 'Project member removed successfully.',
+        'removed_user_id' => $user->id,
+    ]);
+}
+
+public function updateMemberRole(
+    Request $request,
+    Project $project,
+    User $user
+): JsonResponse {
+    Gate::authorize('updateMemberRole', $project);
+
+    $validated = $request->validate([
+        'role' => [
+            'required',
+            'string',
+            Rule::in(['manager', 'developer', 'viewer']),
+        ],
+    ]);
+
+    if ((int) $project->owner_id === (int) $user->id) {
+        return response()->json([
+            'message' => 'Project owner role cannot be changed.',
+        ], 422);
+    }
+
+    $isMember = $project->members()
+        ->where('users.id', $user->id)
+        ->exists();
+
+    if (!$isMember) {
+        return response()->json([
+            'message' => 'User is not a member of this project.',
+        ], 404);
+    }
+
+    $project->members()->updateExistingPivot(
+        $user->id,
+        ['role' => $validated['role']]
+    );
+
+    return response()->json([
+        'message' => 'Project member role updated successfully.',
+        'member' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $validated['role'],
+        ],
+    ]);
+}
+
 }

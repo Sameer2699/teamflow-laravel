@@ -22,5 +22,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/projects/{project}', [ProjectController::class, 'update']);
     Route::patch('/projects/{project}', [ProjectController::class, 'update']);
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+    Route::get('/projects/{project}/members', [ProjectController::class, 'members']);
+    Route::post(
+    '/projects/{project}/members',
+    [ProjectController::class, 'addMember']
+);
+Route::patch(
+    '/projects/{project}/members/{user}',
+    [ProjectController::class, 'updateMemberRole']
+);
+	Route::delete(
+    '/projects/{project}/members/{user}',
+    [ProjectController::class, 'removeMember']
+);
 
 });
