@@ -51,3 +51,7 @@ Route::delete(
     '/projects/{project}/tasks/{task}',
     [TaskController::class, 'destroy']
 );
+Route::get(
+    '/projects/{project}/tasks',
+    [TaskController::class, 'index']
+);

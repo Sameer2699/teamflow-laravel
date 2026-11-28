@@ -134,4 +134,65 @@ public function destroy(
         'message' => 'Task deleted successfully.',
     ]);
 }
+
+public function index(Request $request, Project $project): JsonResponse
+{
+    // 1. Check whether the user can access this project
+    Gate::authorize('view', $project);
+
+    // 2. Validate filters
+    $filters = $request->validate([
+        'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+        'status' => ['sometimes', 'in:todo,in_progress,blocked,done'],
+        'priority' => ['sometimes', 'in:low,medium,high,urgent'],
+        'assigned_to' => ['sometimes', 'integer', 'exists:users,id'],
+        'due_date_from' => ['sometimes', 'date'],
+        'due_date_to' => ['sometimes', 'date', 'after_or_equal:due_date_from'],
+        'page' => ['sometimes', 'integer', 'min:1'],
+    ]);
+
+    // 3. Start project-specific task query
+    $query = $project->tasks()
+        ->with(['creator', 'assignee']);
+
+    // 4. Search by title
+    $query->when($filters['search'] ?? null, function ($query, $search) {
+        $query->where('title', 'like', '%' . $search . '%');
+    });
+
+    // 5. Filter by status
+    $query->when($filters['status'] ?? null, function ($query, $status) {
+        $query->where('status', $status);
+    });
+
+    // 6. Filter by priority
+    $query->when($filters['priority'] ?? null, function ($query, $priority) {
+        $query->where('priority', $priority);
+    });
+
+    // 7. Filter by assigned user
+    $query->when($filters['assigned_to'] ?? null, function ($query, $userId) {
+        $query->where('assigned_to', $userId);
+    });
+
+    // 8. Filter by due date range
+    $query->when($filters['due_date_from'] ?? null, function ($query, $date) {
+        $query->whereDate('due_date', '>=', $date);
+    });
+
+    $query->when($filters['due_date_to'] ?? null, function ($query, $date) {
+        $query->whereDate('due_date', '<=', $date);
+    });
+
+    // 9. Paginate results
+    $tasks = $query->latest()
+        ->paginate(10)
+        ->withQueryString();
+
+    // 10. Return response
+    return response()->json([
+        'message' => 'Tasks retrieved successfully.',
+        'tasks' => $tasks,
+    ]);
+}
 }

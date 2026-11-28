@@ -550,4 +550,161 @@ public function test_developer_cannot_delete_task(): void
         'id' => $task->id,
     ]);
 }
+public function test_project_member_can_list_tasks(): void
+{
+    $owner = User::factory()->create();
+    $developer = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    $project->members()->attach($developer->id, [
+        'role' => 'developer',
+        'joined_at' => now(),
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Login API',
+        'status' => 'todo',
+        'priority' => 'high',
+    ]);
+
+    $this->actingAs($developer)
+        ->getJson("/api/projects/{$project->id}/tasks")
+        ->assertOk()
+        ->assertJsonPath('tasks.total', 1)
+        ->assertJsonPath('tasks.data.0.title', 'Login API');
+}
+public function test_non_member_cannot_list_project_tasks(): void
+{
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    $this->actingAs($otherUser)
+        ->getJson("/api/projects/{$project->id}/tasks")
+        ->assertForbidden();
+}
+public function test_tasks_can_be_filtered_by_status(): void
+{
+    $owner = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Login API',
+        'status' => 'todo',
+        'priority' => 'high',
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Payment API',
+        'status' => 'in_progress',
+        'priority' => 'medium',
+    ]);
+
+    $this->actingAs($owner)
+        ->getJson("/api/projects/{$project->id}/tasks?status=in_progress")
+        ->assertOk()
+        ->assertJsonPath('tasks.total', 1)
+        ->assertJsonPath('tasks.data.0.title', 'Payment API');
+}
+public function test_tasks_are_paginated(): void
+{
+    $owner = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    for ($i = 1; $i <= 15; $i++) {
+        $project->tasks()->create([
+            'created_by' => $owner->id,
+            'title' => "Task {$i}",
+            'status' => 'todo',
+            'priority' => 'medium',
+        ]);
+    }
+
+    $this->actingAs($owner)
+        ->getJson("/api/projects/{$project->id}/tasks")
+        ->assertOk()
+        ->assertJsonPath('tasks.total', 15)
+        ->assertJsonPath('tasks.per_page', 10)
+        ->assertJsonCount(10, 'tasks.data');
+}
+public function test_tasks_can_be_searched_by_title_and_priority(): void
+{
+    $owner = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Login API Development',
+        'status' => 'todo',
+        'priority' => 'high',
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Payment API Development',
+        'status' => 'todo',
+        'priority' => 'medium',
+    ]);
+
+    $this->actingAs($owner)
+        ->getJson("/api/projects/{$project->id}/tasks?search=Login&priority=high")
+        ->assertOk()
+        ->assertJsonPath('tasks.total', 1)
+        ->assertJsonPath('tasks.data.0.title', 'Login API Development');
+}
+public function test_tasks_can_be_filtered_by_assignee_and_due_date(): void
+{
+    $owner = User::factory()->create();
+    $developer = User::factory()->create();
+
+    $project = Project::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    $project->members()->attach($developer->id, [
+        'role' => 'developer',
+        'joined_at' => now(),
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'assigned_to' => $developer->id,
+        'title' => 'Login API',
+        'status' => 'todo',
+        'priority' => 'high',
+        'due_date' => '2026-11-20',
+    ]);
+
+    $project->tasks()->create([
+        'created_by' => $owner->id,
+        'title' => 'Payment API',
+        'status' => 'todo',
+        'priority' => 'medium',
+        'due_date' => '2026-12-10',
+    ]);
+
+    $this->actingAs($owner)
+        ->getJson("/api/projects/{$project->id}/tasks?assigned_to={$developer->id}&due_date_from=2026-11-01&due_date_to=2026-11-30")
+        ->assertOk()
+        ->assertJsonPath('tasks.total', 1)
+        ->assertJsonPath('tasks.data.0.title', 'Login API');
+}
 }
