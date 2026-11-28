@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\TaskController;
 
 Route::post('/register', [AuthController::class, 'register']);
 
@@ -35,5 +36,18 @@ Route::patch(
     '/projects/{project}/members/{user}',
     [ProjectController::class, 'removeMember']
 );
+Route::post('/projects/{project}/tasks', [TaskController::class, 'store']);
 
 });
+Route::patch(
+    '/projects/{project}/tasks/{task}',
+    [TaskController::class, 'update']
+);
+Route::patch(
+    '/projects/{project}/tasks/{task}/status',
+    [TaskController::class, 'updateStatus']
+);
+Route::delete(
+    '/projects/{project}/tasks/{task}',
+    [TaskController::class, 'destroy']
+);

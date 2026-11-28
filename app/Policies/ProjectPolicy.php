@@ -111,4 +111,54 @@ public function removeMember(User $user, Project $project): bool
     {
         return false;
     }
+
+    public function createTask(User $user, Project $project): bool
+{
+    if ((int) $project->owner_id === (int) $user->id) {
+        return true;
+    }
+
+    return $project->members()
+        ->where('users.id', $user->id)
+        ->wherePivot('role', 'manager')
+        ->exists();
+}
+public function updateTask(
+    User $user,
+    Project $project,
+    \App\Models\Task $task
+): bool {
+
+    // Project owner can update any task
+    if ((int) $project->owner_id === (int) $user->id) {
+        return true;
+    }
+
+    // Project manager can update any task
+    $isManager = $project->members()
+        ->where('users.id', $user->id)
+        ->wherePivot('role', 'manager')
+        ->exists();
+
+    if ($isManager) {
+        return true;
+    }
+
+    // Developer can update only their assigned task
+    return (int) $task->assigned_to === (int) $user->id;
+}
+public function deleteTask(
+    User $user,
+    Project $project
+): bool {
+
+    if ((int) $project->owner_id === (int) $user->id) {
+        return true;
+    }
+
+    return $project->members()
+        ->where('users.id', $user->id)
+        ->wherePivot('role', 'manager')
+        ->exists();
+}
 }
